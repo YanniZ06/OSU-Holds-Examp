@@ -40,6 +40,7 @@ class Note extends FlxSprite
 
 	public var sustainLength:Float = 0;
 	public var isSustainNote:Bool = false;
+	public var isSustainEnd:Bool = false;
 	public var noteType(default, set):String = null;
 
 	public var eventName:String = '';
@@ -415,9 +416,15 @@ class Note extends FlxSprite
 			}
 		}
 
-		if (tooLate && !inEditor)
-		{
-			if (alpha > 0.3)
+		if(!inEditor){ //fixes crashes with event notes, whyever that happens??
+			if(animation.curAnim.name.endsWith("end") && ClientPrefs.judgeSustains){ //easily checks if its the end-part of a sustain note based on this notes animation name
+				isSustainEnd = true;
+			}
+			else{
+				isSustainEnd = false;
+			}
+
+			if(tooLate && alpha > 0.3)
 				alpha = 0.3;
 		}
 	}

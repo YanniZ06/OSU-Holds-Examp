@@ -59,6 +59,7 @@ class ClientPrefs {
 	public static var goodWindow:Int = 90;
 	public static var badWindow:Int = 135;
 	public static var safeFrames:Float = 10;
+	public static var judgeSustains:Bool = true; //if true, will judge how well you do on sustains and give misses if you hold for too long
 
 	//Every key has two binds, add your key bind down here and then add your control on options/ControlsSubState.hx and Controls.hx
 	public static var keyBinds:Map<String, Array<FlxKey>> = [
@@ -118,6 +119,8 @@ class ClientPrefs {
 		FlxG.save.data.achievementsMap = Achievements.achievementsMap;
 		FlxG.save.data.henchmenDeath = Achievements.henchmenDeath;
 
+		FlxG.save.data.judgeSustains = judgeSustains;
+
 		FlxG.save.data.ratingOffset = ratingOffset;
 		FlxG.save.data.sickWindow = sickWindow;
 		FlxG.save.data.goodWindow = goodWindow;
@@ -139,6 +142,10 @@ class ClientPrefs {
 	}
 
 	public static function loadPrefs() {
+		if (FlxG.save.data.judgeSustains != null){
+			judgeSustains = FlxG.save.data.judgeSustains;
+		}
+		
 		if(FlxG.save.data.downScroll != null) {
 			downScroll = FlxG.save.data.downScroll;
 		}

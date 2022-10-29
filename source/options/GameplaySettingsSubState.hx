@@ -63,6 +63,14 @@ class GameplaySettingsSubState extends BaseOptionsMenu
 			true);
 		addOption(option);
 
+		//toggleable option for psych gameplay-settings menu, based on the judgeSustains variable in clientprefs
+		var option:Option = new Option('Judge Sustain Notes',
+		'If checked, sustain notes will be judged based off\nyour timing on letting go of the key.\nThey will have the same hit-window as normal notes\nand holding too long will cause a miss.',
+		'judgeSustains',
+		'bool',
+		true);
+		addOption(option);
+
 		var option:Option = new Option('Ghost Tapping',
 			"If checked, you won't get misses from pressing keys\nwhile there are no notes able to be hit.",
 			'ghostTapping',

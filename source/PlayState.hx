@@ -2657,6 +2657,16 @@ class PlayState extends MusicBeatState
 			paused = false;
 			callOnLuas('onResume', []);
 
+			/*
+			skips rating but chances of this happening are basically 0, and timing it each time like this is stupid
+
+			doing this since you release the key youre pressing but it wont get recoginized in PlayState, meaning both the animation and
+			judgement thing for the sustain would keep going since those are based on the key-release function
+			*/
+			for(i in 0...3){
+				if(playerStrums.members[i].animation.curAnim.name != 'static') onRelease_Call(null, i);
+			}
+
 			#if desktop
 			if (startTimer != null && startTimer.finished)
 			{
@@ -2731,6 +2741,16 @@ class PlayState extends MusicBeatState
 			iconP1.swapOldIcon();
 		}*/
 		callOnLuas('onUpdate', [elapsed]);
+
+		if(holdingEndNote){
+			for(i in 0...4){ //doing a for-loop to use the noteMissPress function
+				var strum:StrumNote = playerStrums.members[i];
+				if(strum.heldTooLong){ //fuck you! makes you miss the note
+					noteMissPress(i, true);
+					strum.heldTooLong = false;
+				}
+			}
+		}
 
 		switch (curStage)
 		{
@@ -3929,6 +3949,14 @@ class PlayState extends MusicBeatState
 	public var showComboNum:Bool = true;
 	public var showRating:Bool = true;
 
+	public var sustainHits:Array<Int> = [ //sick, good, bad, shit, misses | useful for excluding certain ratings from a ratingScreen or whatever
+		0,
+		0,
+		0,
+		0,
+		0
+	];
+
 	private function popUpScore(note:Note = null):Void
 	{
 		var noteDiff:Float = Math.abs(note.strumTime - Conductor.songPosition + ClientPrefs.ratingOffset);
@@ -3951,9 +3979,11 @@ class PlayState extends MusicBeatState
 		var daRating:Rating = Conductor.judgeNote(note, noteDiff);
 		var ratingNum:Int = 0;
 
-		totalNotesHit += daRating.ratingMod;
+		if(!note.isSustainEnd){
+			totalNotesHit += daRating.ratingMod;
+			if(!note.ratingDisabled) daRating.increase();
+		}
 		note.ratingMod = daRating.ratingMod;
-		if(!note.ratingDisabled) daRating.increase();
 		note.rating = daRating.name;
 
 		if(daRating.noteSplash && !note.noteSplashDisabled)
@@ -3961,13 +3991,25 @@ class PlayState extends MusicBeatState
 			spawnNoteSplashOnNote(note);
 		}
 
+		var ratingMap:Map<String, Int> = [
+			"sick" => 0,
+			"good" => 1,
+			"bad" => 2,
+			"shit" => 3
+		];
+		var insertAt:Int = ratingMap[daRating.name];
+
 		if(!practiceMode && !cpuControlled) {
 			songScore += score;
 			if(!note.ratingDisabled)
 			{
-				songHits++;
-				totalPlayed++;
-				RecalculateRating(false);
+				if(!note.isSustainEnd){
+					songHits++;
+					totalPlayed++;
+					RecalculateRating(false);
+				}
+				else
+					sustainHits[insertAt] += 1;
 			}
 		}
 
@@ -4202,18 +4244,36 @@ class PlayState extends MusicBeatState
 	private function onKeyRelease(event:KeyboardEvent):Void
 	{
 		var eventKey:FlxKey = event.keyCode;
-		var key:Int = getKeyFromEvent(eventKey);
-		if(!cpuControlled && startedCountdown && !paused && key > -1)
-		{
+		onRelease_Call(eventKey, null);
+
+		//trace('released: ' + controlArray);
+	}
+
+	private function onRelease_Call(?realKey:FlxKey = null, ?parsedKey:Int = null){ //for manually calling this function on a certain key
+		var key:Int = -1; //the parsed key to match its assigned note/strum
+		if(realKey != null)key = getKeyFromEvent(realKey)
+		else key = parsedKey; //currently only used for the pausing thingie
+
+		if(!cpuControlled && startedCountdown && !paused && key > -1){
 			var spr:StrumNote = playerStrums.members[key];
 			if(spr != null)
 			{
 				spr.playAnim('static');
 				spr.resetAnim = 0;
+				
+				if(spr.holdingSustain){
+					popUpScore(spr.endNote);
+					//spr.endNote = null;
+					spr.holdingSustain = false;
+
+					for(i in 0...4){ //checking if any other strum-notes are holding a sustain, if not set hold note shit to false
+						if(playerStrums.members[i].holdingSustain) break;
+						if(i == 3) holdingEndNote = false;
+					}
+				}
 			}
 			callOnLuas('onKeyRelease', [key]);
 		}
-		//trace('released: ' + controlArray);
 	}
 
 	private function getKeyFromEvent(key:FlxKey):Int
@@ -4234,6 +4294,8 @@ class PlayState extends MusicBeatState
 		return -1;
 	}
 
+	var holdingEndNote:Bool = false; //checks if you're holding literally any endNote for ratings and stuff
+
 	// Hold notes
 	private function keyShit():Void
 	{
@@ -4243,6 +4305,7 @@ class PlayState extends MusicBeatState
 		var down = controls.NOTE_DOWN;
 		var left = controls.NOTE_LEFT;
 		var controlHoldArray:Array<Bool> = [left, down, up, right];
+		var lastHit_note:Note = null;
 
 		// TO DO: Find a better way to handle controller inputs, this should work for now
 		if(ClientPrefs.controllerMode)
@@ -4268,6 +4331,16 @@ class PlayState extends MusicBeatState
 				if (daNote.isSustainNote && controlHoldArray[daNote.noteData] && daNote.canBeHit
 				&& daNote.mustPress && !daNote.tooLate && !daNote.wasGoodHit) {
 					goodNoteHit(daNote);
+
+					var spr:StrumNote = playerStrums.members[daNote.noteData];
+					if(spr != null) //shouldnt be able to be null anyways but who knows
+					{
+						if(daNote.isSustainEnd){ //sets info that the current StrumNote is holding a sustainEnd
+							holdingEndNote = true;
+							spr.holdingSustain = true;
+							spr.endNote = daNote; //sets note info like strumtime for rating inside of StrumNote
+						}
+					}
 				}
 			});
 
@@ -4342,9 +4415,9 @@ class PlayState extends MusicBeatState
 		callOnLuas('noteMiss', [notes.members.indexOf(daNote), daNote.noteData, daNote.noteType, daNote.isSustainNote]);
 	}
 
-	function noteMissPress(direction:Int = 1):Void //You pressed a key when there was no notes to press for this key
+	function noteMissPress(direction:Int = 1, holdNoteMiss:Bool = false):Void //You pressed a key when there was no notes to press for this key
 	{
-		if(ClientPrefs.ghostTapping) return; //fuck it
+		if(ClientPrefs.ghostTapping && !holdNoteMiss) return; //fuck it
 
 		if (!boyfriend.stunned)
 		{
@@ -4364,11 +4437,12 @@ class PlayState extends MusicBeatState
 			if(!practiceMode) songScore -= 10;
 			if(!endingSong) {
 				songMisses++;
+				sustainHits[4] += 1; //adds sustain miss aswell
 			}
 			totalPlayed++;
 			RecalculateRating(true);
 
-			FlxG.sound.play(Paths.soundRandom('missnote', 1, 3), FlxG.random.float(0.1, 0.2));
+			FlxG.sound.play(Paths.soundRandom('missnote', 1, 3), FlxG.random.float(0.6, 0.9));
 			// FlxG.sound.play(Paths.sound('missnote1'), 1, false);
 			// FlxG.log.add('played imss note');
 

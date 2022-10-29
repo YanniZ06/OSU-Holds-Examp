@@ -14,6 +14,11 @@ class StrumNote extends FlxSprite
 	public var direction:Float = 90;//plan on doing scroll directions soon -bb
 	public var downScroll:Bool = false;//plan on doing scroll directions soon -bb
 	public var sustainReduce:Bool = true;
+
+	//doing this shit in here because its easy and more accurate to track individual strumnotes
+	public var holdingSustain:Bool = false;
+	public var heldTooLong:Bool = false;
+	public var endNote:Note = null; //for keeping track of note timings
 	
 	private var player:Int;
 	
@@ -139,6 +144,17 @@ class StrumNote extends FlxSprite
 		if(animation.curAnim.name == 'confirm' && !PlayState.isPixelStage) {
 			centerOrigin();
 		//}
+		}
+
+		//sustain note stuff
+		if(holdingSustain){
+			//if youre holding and the current song position is too far away from the endSustains, it will recognize the note as held for too long
+			//further things happen in PlayState
+			if(endNote.strumTime < Conductor.songPosition - Conductor.safeZoneOffset){ 
+				heldTooLong = true;
+				holdingSustain = false;
+				//trace("held too long!");
+			}
 		}
 
 		super.update(elapsed);
